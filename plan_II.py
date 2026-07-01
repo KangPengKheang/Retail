@@ -49,7 +49,6 @@ SUBMISSION_WORKSHEET_NAME = "Retail"
 LOGIN_SHEET_ID = SUBMISSION_SHEET_ID
 LOGIN_WORKSHEET_NAME = "User"
 SOURCE_CHANNEL_COLUMN = "Source_Channel"
-OWNER_COLUMN = "Sender_Name"
 GOOGLE_CREDENTIALS_FILE = os.path.join(BASE_DIR, "Kheang.json")
 RETAIL_LOGO_FILE = os.path.join(BASE_DIR, "Logo-Retail.png")
 
@@ -553,13 +552,6 @@ def login_form():
                                     f"Source filter: {before_source} → {after_source}"
                                 )
 
-                                before_owner = len(filtered_data)
-                                filtered_data = filter_to_logged_in_username(filtered_data, user_data)
-                                after_owner = len(filtered_data)
-                                filter_steps.append(
-                                    f"Username filter ({user_data.get('username', '')}): {before_owner} -> {after_owner}"
-                                )
-
                                 # Show filtering progress
                                 with st.expander(
                                     "📈 Filtering Progress", expanded=False
@@ -651,21 +643,6 @@ def filter_to_allowed_sources(df, user_data):
         .str.casefold()
     )
     return df[source_keys.isin(allowed_keys)].copy()
-
-
-def filter_to_logged_in_username(df, user_data):
-    """Keep only rows owned by the logged-in user's Telegram name."""
-    if df is None or df.empty:
-        return df
-
-    username = str(user_data.get("username", "")).strip()
-    if not username or OWNER_COLUMN not in df.columns:
-        return df.iloc[0:0].copy()
-
-    owner_key = username.lower()
-    return df[
-        df[OWNER_COLUMN].astype(str).str.strip().str.lower() == owner_key
-    ].copy()
 
 
 # === Extract info from text ===
@@ -1947,7 +1924,6 @@ def main():
                 # Enforce the logged-in user's source permissions before any UI filters.
                 user_data = st.session_state.get("user_data", {})
                 telegram_df = filter_to_allowed_sources(telegram_df, user_data)
-                telegram_df = filter_to_logged_in_username(telegram_df, user_data)
                 telegram_df = telegram_df.copy()
                 st.success(f"✅ Loaded {len(telegram_df)} customers")
 
