@@ -48,7 +48,8 @@ SUBMISSION_SHEET_ID = "1msoRzVjb_XnP8W2pBoLNyfGP2lL1zC_PdVAZ8IXGS-0"
 SUBMISSION_WORKSHEET_NAME = "Retail"
 LOGIN_SHEET_ID = SUBMISSION_SHEET_ID
 LOGIN_WORKSHEET_NAME = "User"
-ALLOWED_SOURCE_COLUMN = "Sender_Name"
+SOURCE_CHANNEL_COLUMN = "Source_Channel"
+OWNER_COLUMN = "Sender_Name"
 GOOGLE_CREDENTIALS_FILE = os.path.join(BASE_DIR, "Kheang.json")
 RETAIL_LOGO_FILE = os.path.join(BASE_DIR, "Logo-Retail.png")
 
@@ -268,9 +269,9 @@ def load_users_from_sheets(_gc, sheet_id, worksheet_name=LOGIN_WORKSHEET_NAME):
             password = str(user['password']).strip()
             
             # Handle allowed_sources
-            allowed_raw = user.get('allowed_sources', 'all')
+            allowed_raw = user.get('allowed_sources', '')
             if pd.isna(allowed_raw) or str(allowed_raw).strip() == '':
-                sources = 'all'
+                sources = []
             elif str(allowed_raw).strip().lower() == 'all':
                 sources = 'all'
             else:
@@ -279,8 +280,7 @@ def load_users_from_sheets(_gc, sheet_id, worksheet_name=LOGIN_WORKSHEET_NAME):
             users_dict[password] = {
                 "password": password,
                 "username": str(user.get('username', 'Unknown')).strip(),
-                "allowed_sources": "all",
-                "configured_allowed_sources": sources,
+                "allowed_sources": sources,
                 "branch": str(user.get('branch', '')).strip(),
                 "role": str(user.get('role', 'rm')).strip(),
                 "is_active": str(user.get('is_active', 'TRUE')).strip().upper() in ["TRUE", "YES", "Y", "1", "ACTIVE"]
@@ -546,21 +546,12 @@ def login_form():
                                     )
 
                                 # Apply user-specific source filtering
-                                if user_data.get("allowed_sources") != "all":
-                                    if ALLOWED_SOURCE_COLUMN in filtered_data.columns:
-                                        before_source = len(filtered_data)
-                                        allowed_sources = user_data["allowed_sources"]
-                                        allowed_source_keys = {str(source).strip().lower() for source in allowed_sources}
-                                        filtered_data = filtered_data[
-                                            filtered_data[ALLOWED_SOURCE_COLUMN].astype(str).str.strip().str.lower().isin(allowed_source_keys)
-                                        ]
-                                        after_source = len(filtered_data)
-                                        filter_steps.append(
-                                            f"Source filter: {before_source} → {after_source}"
-                                        )
-                                        st.info(
-                                            f"🔐 User allowed sources: {allowed_sources}"
-                                        )
+                                before_source = len(filtered_data)
+                                filtered_data = filter_to_allowed_sources(filtered_data, user_data)
+                                after_source = len(filtered_data)
+                                filter_steps.append(
+                                    f"Source filter: {before_source} → {after_source}"
+                                )
 
                                 before_owner = len(filtered_data)
                                 filtered_data = filter_to_logged_in_username(filtered_data, user_data)
@@ -635,18 +626,45 @@ def clean_dataframe_for_streamlit(df):
     
     return df_clean
 
+def filter_to_allowed_sources(df, user_data):
+    """Keep only rows whose Source_Channel is allowed for this user."""
+    if df is None or df.empty:
+        return df
+
+    allowed_sources = user_data.get("allowed_sources", [])
+    if allowed_sources == "all":
+        return df.copy()
+
+    if SOURCE_CHANNEL_COLUMN not in df.columns or not allowed_sources:
+        return df.iloc[0:0].copy()
+
+    allowed_keys = {
+        str(source).strip().casefold()
+        for source in allowed_sources
+        if str(source).strip()
+    }
+    source_keys = (
+        df[SOURCE_CHANNEL_COLUMN]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+    )
+    return df[source_keys.isin(allowed_keys)].copy()
+
+
 def filter_to_logged_in_username(df, user_data):
     """Keep only rows owned by the logged-in user's Telegram name."""
     if df is None or df.empty:
         return df
 
     username = str(user_data.get("username", "")).strip()
-    if not username or ALLOWED_SOURCE_COLUMN not in df.columns:
+    if not username or OWNER_COLUMN not in df.columns:
         return df.iloc[0:0].copy()
 
     owner_key = username.lower()
     return df[
-        df[ALLOWED_SOURCE_COLUMN].astype(str).str.strip().str.lower() == owner_key
+        df[OWNER_COLUMN].astype(str).str.strip().str.lower() == owner_key
     ].copy()
 
 
@@ -1926,16 +1944,9 @@ def main():
                     ) 
                 ]
 
-                # 🚨 FIX 2: Corrected the key name from "allow_sources" to "allowed_sources"
+                # Enforce the logged-in user's source permissions before any UI filters.
                 user_data = st.session_state.get("user_data", {})
-                #allowed_sources = user_data.get("allowed_sources", "all")
-                if user_data.get("allowed_sources") != "all":  # Fixed typo
-                    allowed_sources = user_data.get("allowed_sources", [])
-                    if ALLOWED_SOURCE_COLUMN in telegram_df.columns and allowed_sources:
-                        allowed_source_keys = {str(source).strip().lower() for source in allowed_sources}
-                        telegram_df = telegram_df[
-                            telegram_df[ALLOWED_SOURCE_COLUMN].astype(str).str.strip().str.lower().isin(allowed_source_keys)
-                        ]
+                telegram_df = filter_to_allowed_sources(telegram_df, user_data)
                 telegram_df = filter_to_logged_in_username(telegram_df, user_data)
                 telegram_df = telegram_df.copy()
                 st.success(f"✅ Loaded {len(telegram_df)} customers")
