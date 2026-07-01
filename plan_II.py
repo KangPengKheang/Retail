@@ -2126,21 +2126,20 @@ def main():
             st.stop()
     
         # Select columns to display
-        display_columns = []
         preferred_columns = [
-            "Sender_Name", "Name", "Tel", "Bank", "Business", 
-            "Purpose", "Amount", "Interest", "Loan_Type", 
-            "Tenure", "Maturity", "Potential_Level", "Potential_Product", 
-            "Remark", "Message_Date"
+            "Sender_ID",
+            "Sender_Name",
+            "Type",
+            "Call_Plan",
+            "Direction",
+            "Client_Name",
+            "Contact",
+            "Category",
+            "Message_Date",
         ]
-        
-        for col in preferred_columns:
-            if col in filtered_df.columns:
-                display_columns.append(col)
-        
-        # Limit to reasonable number of columns
-        if len(display_columns) > 15:
-            display_columns = display_columns[:15]
+        display_columns = [
+            column for column in preferred_columns if column in filtered_df.columns
+        ]
         
         display_df = filtered_df[display_columns].copy()
     
