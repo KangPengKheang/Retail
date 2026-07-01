@@ -43,7 +43,7 @@ import time
 # from oauth2client.service_account import ServiceAccountCredentials
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHEET_ID = "1wM7DTHizhg_A3h0qV3EhX4os4hk46uolW-ESQSJkgZs"
-WORKSHEET_NAME = "retail_data"
+WORKSHEET_NAME = "Retail_Banking"
 SUBMISSION_SHEET_ID = "1msoRzVjb_XnP8W2pBoLNyfGP2lL1zC_PdVAZ8IXGS-0"
 SUBMISSION_WORKSHEET_NAME = "Retail"
 LOGIN_SHEET_ID = SUBMISSION_SHEET_ID
@@ -738,6 +738,10 @@ def load_sheet_data(_gc, sheet_id, worksheet_name):
                 str(column).replace("\ufeff", "").replace("\u200b", "").strip()
                 for column in df.columns
             ]
+            # Retail_Banking calls the customer field Client_Name, while the
+            # existing portfolio UI consistently uses Name.
+            if "Name" not in df.columns and "Client_Name" in df.columns:
+                df["Name"] = df["Client_Name"]
             # st.success(f"✅ Successfully loaded {len(df)} records from {worksheet_name}")
             return df
 
