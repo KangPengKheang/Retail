@@ -43,7 +43,7 @@ import time
 # from oauth2client.service_account import ServiceAccountCredentials
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHEET_ID = "1wM7DTHizhg_A3h0qV3EhX4os4hk46uolW-ESQSJkgZs"
-WORKSHEET_NAME = "Retail_Banking"
+WORKSHEET_NAME = "retail_data"
 SUBMISSION_SHEET_ID = "1msoRzVjb_XnP8W2pBoLNyfGP2lL1zC_PdVAZ8IXGS-0"
 SUBMISSION_WORKSHEET_NAME = "Retail"
 LOGIN_SHEET_ID = SUBMISSION_SHEET_ID
@@ -1926,9 +1926,34 @@ def main():
 
                 # Enforce the logged-in user's source permissions before any UI filters.
                 user_data = st.session_state.get("user_data", {})
+                source_counts = (
+                    telegram_df[SOURCE_CHANNEL_COLUMN]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .value_counts()
+                    .rename_axis(SOURCE_CHANNEL_COLUMN)
+                    .reset_index(name="Rows")
+                    if SOURCE_CHANNEL_COLUMN in telegram_df.columns
+                    else pd.DataFrame()
+                )
                 telegram_df = filter_to_allowed_sources(telegram_df, user_data)
                 telegram_df = telegram_df.copy()
                 st.success(f"✅ Loaded {len(telegram_df)} customers")
+
+                with st.expander("🔎 Inspect source access", expanded=telegram_df.empty):
+                    st.write("**Customer worksheet:**", WORKSHEET_NAME)
+                    st.write("**User worksheet:**", LOGIN_WORKSHEET_NAME)
+                    st.write(
+                        "**Current user's allowed_sources:**",
+                        user_data.get("allowed_sources", []),
+                    )
+                    st.write("**Customer columns:**", list(telegram_df.columns))
+                    if source_counts.empty:
+                        st.error("Source_Channel was not found in the customer worksheet.")
+                    else:
+                        st.write("**Available Source_Channel values before access filtering:**")
+                        st.dataframe(source_counts, hide_index=True, use_container_width=True)
 
             except Exception as e:
                 st.error(f"❌ Error loading data: {str(e)}")
