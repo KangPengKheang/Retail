@@ -43,7 +43,7 @@ import time
 # from oauth2client.service_account import ServiceAccountCredentials
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHEET_ID = "1wM7DTHizhg_A3h0qV3EhX4os4hk46uolW-ESQSJkgZs"
-WORKSHEET_NAME = "retail_data"
+WORKSHEET_NAME = "Retail_Banking"
 SUBMISSION_SHEET_ID = "1msoRzVjb_XnP8W2pBoLNyfGP2lL1zC_PdVAZ8IXGS-0"
 SUBMISSION_WORKSHEET_NAME = "Retail"
 LOGIN_SHEET_ID = SUBMISSION_SHEET_ID
@@ -630,18 +630,16 @@ def filter_to_allowed_sources(df, user_data):
     if SOURCE_CHANNEL_COLUMN not in df.columns or not allowed_sources:
         return df.iloc[0:0].copy()
 
+    def normalize_source(value):
+        value = str(value).replace("\ufeff", "").replace("\u200b", "")
+        return re.sub(r"\s+", " ", value).strip().casefold()
+
     allowed_keys = {
-        str(source).strip().casefold()
+        normalize_source(source)
         for source in allowed_sources
-        if str(source).strip()
+        if normalize_source(source)
     }
-    source_keys = (
-        df[SOURCE_CHANNEL_COLUMN]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .str.casefold()
-    )
+    source_keys = df[SOURCE_CHANNEL_COLUMN].fillna("").map(normalize_source)
     return df[source_keys.isin(allowed_keys)].copy()
 
 
@@ -735,6 +733,11 @@ def load_sheet_data(_gc, sheet_id, worksheet_name):
                 return pd.DataFrame()
 
             df = pd.DataFrame(data)
+            # Google Sheets headers can contain trailing or invisible spaces.
+            df.columns = [
+                str(column).replace("\ufeff", "").replace("\u200b", "").strip()
+                for column in df.columns
+            ]
             # st.success(f"✅ Successfully loaded {len(df)} records from {worksheet_name}")
             return df
 
