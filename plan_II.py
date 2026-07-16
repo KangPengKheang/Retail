@@ -39,6 +39,7 @@ import gspread
 from datetime import datetime, timedelta, date
 import hashlib
 import time
+import uuid
 
 # from oauth2client.service_account import ServiceAccountCredentials
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1407,6 +1408,14 @@ def now_cambodia():
 def today_cambodia():
     """Get current date in Cambodia timezone"""
     return now_cambodia().date()
+
+def delete_plan_task(task_id):
+    """Remove a single daily-plan row while keeping at least one row visible."""
+    if len(st.session_state.tasks) <= 1:
+        return
+    st.session_state.tasks = [
+        task for task in st.session_state.tasks if task.get("id") != task_id
+    ]
     
 def init_session_state():
     if "plan_date" not in st.session_state:
@@ -1446,6 +1455,11 @@ def init_session_state():
                 "customers": [],
             },
         ]
+
+    # Stable IDs prevent widget values from moving to a different row after deletion.
+    for task in st.session_state["tasks"]:
+        if "id" not in task:
+            task["id"] = uuid.uuid4().hex
 
     if "needs_rerun" not in st.session_state:
         st.session_state.needs_rerun = False
@@ -1556,6 +1570,35 @@ def main():
             font-family: 'Segoe UI Semibold', 'Segoe UI', sans-serif !important;
             font-weight: 600 !important;
         }
+
+        /* Compact add/delete controls for Daily Planning */
+        .st-key-add_plan_task button,
+        [class*="st-key-delete_task_"] button {
+            width: 36px !important;
+            min-width: 36px !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            padding: 0 !important;
+            border-radius: 8px !important;
+            line-height: 1 !important;
+            box-shadow: none !important;
+        }
+        .st-key-add_plan_task button {
+            background: #6f42c1 !important;
+            color: white !important;
+            font-size: 25px !important;
+        }
+        [class*="st-key-delete_task_"] button {
+            background: #fff !important;
+            color: #dc3545 !important;
+            border: 1px solid #dc3545 !important;
+            font-size: 19px !important;
+        }
+        .st-key-add_plan_task button:hover,
+        [class*="st-key-delete_task_"] button:hover {
+            transform: none !important;
+            filter: brightness(0.96);
+        }
         
         /* Style form submit buttons */
         .stFormSubmitButton button, .stFormSubmitButton button span {
@@ -1602,7 +1645,7 @@ def main():
     
         with st.container():
             # Header section
-            header_col1, header_col2, header_col3 = st.columns([30, 6, 1])
+            header_col1, header_col2, header_col3 = st.columns([30, 6, 1.5])
             with header_col1:
                 st.subheader("📅 Daily Planning")
             with header_col2:
@@ -1625,7 +1668,7 @@ def main():
             
             # Then modify your button to set the flag:
             with header_col3:
-                if st.button("➕", help="Add New Task", use_container_width=False):
+                if st.button("+", key="add_plan_task", help="Add New Plan"):
                     # Add task logic
                     if st.session_state.tasks:
                         first_row_plan_date = st.session_state.plan_date
@@ -1646,6 +1689,7 @@ def main():
                         new_end_time = datetime.strptime("10:00", "%H:%M").time()
                     
                     st.session_state.tasks.append({
+                        "id": uuid.uuid4().hex,
                         "start_time": new_start_time,
                         "end_time": new_end_time,
                         "plan_date": first_row_plan_date,
@@ -1663,7 +1707,8 @@ def main():
             current_form_data = {}
             
             for i, task in enumerate(st.session_state.tasks):
-                time_col1, time_col2, time_col4, time_col6, time_col7 = st.columns([1, 1, 2, 2, 1])
+                task_id = task["id"]
+                time_col1, time_col2, time_col4, time_col6, time_col7, delete_col = st.columns([1, 1, 2, 2, 1, 0.4])
     
                 with time_col1:
                     start_input = st.text_input(
@@ -1671,7 +1716,7 @@ def main():
                         value=task["start_time"].strftime("%H:%M"),
                         placeholder="8:00 or 08:00 or 8 AM",
                         help="Enter start time in any format",
-                        key=f"start_{i}",
+                        key=f"start_{task_id}",
                     )
                     # Update session state immediately
                     if start_input:
@@ -1692,7 +1737,7 @@ def main():
                         value=task["end_time"].strftime("%H:%M"),
                         placeholder="17:00 or 5:00 or 5 PM",
                         help="Enter end time in any format",
-                        key=f"end_{i}",
+                        key=f"end_{task_id}",
                     )
                     # Update session state immediately
                     if end_input:
@@ -1712,7 +1757,7 @@ def main():
                         f"📝 Activity {i+1}",
                         value=task["activity"],
                         placeholder="Loan review, market visit, etc.",
-                        key=f"activity_{i}",
+                        key=f"activity_{task_id}",
                     )
                     # Update session state immediately
                     st.session_state.tasks[i]["activity"] = activity
@@ -1722,7 +1767,7 @@ def main():
                         f"🎯 Location {i+1}",
                         value=task["location"],
                         placeholder="Customer Location",
-                        key=f"location_{i}",
+                        key=f"location_{task_id}",
                     )
                     # Update session state immediately
                     st.session_state.tasks[i]["location"] = location
@@ -1732,10 +1777,21 @@ def main():
                         f"👥 Number Cus {i+1}",
                         value=task["num_customers"],
                         placeholder="0, 1, 2, etc.",
-                        key=f"num_customers_{i}",
+                        key=f"num_customers_{task_id}",
                     )
                     # Update session state immediately
                     st.session_state.tasks[i]["num_customers"] = num_customers
+
+                with delete_col:
+                    st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+                    st.button(
+                        "✕",
+                        key=f"delete_task_{task_id}",
+                        help=f"Delete Plan {i+1}",
+                        disabled=len(st.session_state.tasks) <= 1,
+                        on_click=delete_plan_task,
+                        args=(task_id,),
+                    )
     
                 # Customer details expander - NOW SHOWS IMMEDIATELY
                 num_customers_val = st.session_state.tasks[i]["num_customers"]
@@ -1763,7 +1819,7 @@ def main():
                                     f"Customer Name {customer_num + 1}",
                                     value=st.session_state.tasks[i]["customers"][customer_num]["name"],
                                     placeholder="Enter customer name",
-                                    key=f"cust_name_{i}_{customer_num}",
+                                    key=f"cust_name_{task_id}_{customer_num}",
                                 )
                                 # Update session state immediately
                                 st.session_state.tasks[i]["customers"][customer_num]["name"] = customer_name
@@ -1773,7 +1829,7 @@ def main():
                                     f"Phone Number {customer_num + 1}",
                                     value=st.session_state.tasks[i]["customers"][customer_num]["contact"],
                                     placeholder="Phone or other contact",
-                                    key=f"cust_contact_{i}_{customer_num}",
+                                    key=f"cust_contact_{task_id}_{customer_num}",
                                 )
                                 # Update session state immediately
                                 st.session_state.tasks[i]["customers"][customer_num]["contact"] = customer_contact
@@ -1783,7 +1839,7 @@ def main():
                                     f"Business {customer_num + 1}",
                                     value=st.session_state.tasks[i]["customers"][customer_num]["biz"],
                                     placeholder="Customer Business",
-                                    key=f"cust_biz_{i}_{customer_num}",
+                                    key=f"cust_biz_{task_id}_{customer_num}",
                                 )
                                 # Update session state immediately
                                 st.session_state.tasks[i]["customers"][customer_num]["biz"] = customer_biz
